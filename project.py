@@ -1,301 +1,318 @@
 import random
-import DisplayManager
+import sys
 
-# Properties for cards in UNO
-colours      = ["red", "blue", "green", "yellow"]
-specialCards = ["S", "R", "+2"]
-wildCards    = ["+4", "W"]
+class card:
+    '''represents a card'''
 
-class Card:
-    def __init__(self, colour, number, special):
-        self.colour  = colour
-        self.number  = number
-        self.special = special
+    def __init__(self, rank, color=None):
+        '''Card(rank,color) -> Card
+        creates a card with the given rank and color'''
+        self.rank = rank
+        self.color = color
 
-    def displayCard(self):
-        ''' This function displays the card (Colour, Number) to the terminal '''
-        # If the card is a non-coloured special card (i.e. 'Wildcard')
-        if self.special == wildCards[0] or self.special == wildCards[1]:
-            print(self.special, end = " ")
+    def __str__(self):
+        '''str(card) -> str'''
+        card = ''
+        if self.color != None:
+            card += str(self.color) + ' '
+        card += str(self.rank)
+        return(card)
 
-        # If the card is a coloured special card (i.e. Skip, Reverse, +2)
-        elif self.special == specialCards[0] or self.special == specialCards[1] or self.special == specialCards[2]:
-            print(self.colour + self.special, end = " ")
+    def match(self, other):
+        '''card.match(card) -> boolean
+        this function will return True if the cards match in rank or color, False if not'''
+        return (self.color == other.color) or (self.rank == other.rank) \
+            or self.rank in ['WILD', 'WILD DRAW FOUR']
 
-        # If the card is 'normal' (has a colour and a number)
-        else:
-            print(self.colour + str(self.number), end = " ")
+
+class Deck:
+    '''represents a deck/list of typically 108 Uno cards'''
+
+    def __init__(self):
+        '''Deck() -> Deck
+        creates a new full Uno deck'''
+        self.deck = []
+        for color in ['red', 'blue', 'green', 'yellow']:
+            self.deck.append(card(0, color))  # one 0 of each color
+            for i in range(2):
+                for n in range(1, 10):  # two of each of 1-9 of each color
+                    self.deck.append(card(n, color))
+            for i in range(2):
+                # add two action cards for every color
+                for action in ['SKIP', 'REVERSE', 'DRAW TWO']:
+                    self.deck.append(card(action, color))
+        for i in range(4):
+            self.deck.append(card('WILD'))
+            self.deck.append(card('WILD DRAW FOUR'))
+        random.shuffle(self.deck)  # shuffle the deck
+
+    def __str__(self):
+        '''str(deck) -> str'''
+        return 'An Uno deck with ' + str(len(self.deck)) + ' cards remaining.'
+
+    def empty(self):
+        '''Deck.empty() -> boolean
+        this function will return True if the deck is empty, and False if it is not'''
+        return len(self.deck) == 0
+
+    def remove_card(self):
+        '''Deck.remove_card() -> Card
+        this function deals a card from the deck and returns it (the dealt card is removed from the deck)'''
+        return self.deck.pop()
+
+    def reset_deck(self, pile):
+        '''Deck.reset(pile)
+        this function resets the deck from the pile'''
+        self.deck = pile.reset_pile()  # get cards from the pile
+        random.shuffle(self.deck)  # shuffle the deck
+
+
+class Pile:
+    '''represents the discard pile in Uno
+    attribute:
+      pile: list of UnoCards'''
+
+    def __init__(self, deck):
+        '''Pile(deck) -> Pile
+        creates a new pile by drawing a card from the deck'''
+        card = deck.remove_card()
+        self.pile = [card]  # all the cards in the pile
+
+    def __str__(self):
+        '''str(Pile) -> str'''
+        return 'The pile has ' + str(self.pile[-1]) + ' on top.\n'
+
+    def top_card(self):
+        '''Pile.top_card() -> Card
+        returns the top card in the pile'''
+        return self.pile[-1]
+
+    def add_card(self, card):
+        '''Pile.add_card(card)
+        adds the card to the top of the pile'''
+        self.pile.append(card)
+
+    def reset_pile(self):
+        '''Pile.reset_pile() -> list
+        removes all but the top card from the pile and
+          returns the rest of the cards as a list of Cards'''
+        newdeck = self.pile[:-1]
+        self.pile = [self.pile[-1]]
+        return newdeck
+
 
 class Player:
-    def __init__(self, id, hand, numCards):
-        self.id       = id
-        self.hand     = hand
-        self.numCards = numCards
+    '''represents a player with a name and a hand'''
 
-    def addCard(self, card):
-        ''' This function adds a new card to the player's hand '''
-        self.hand.append(card)
-        self.numCards += 1
+    def __init__(self, name, deck):
+        '''Player(name,deck) -> Player
+        creates a new player with a new 7-card hand'''
+        self.name = name
+        self.hand = [deck.remove_card() for i in range(7)]
 
-    def displayHand(self):
-        ''' This function displays the player's hand to the terminal '''
-        print("Player " + str(self.id) + "'s hand: ", end = " ")
+    def __str__(self):
+        '''str(Player) -> Player'''
+        return str(self.name) + ' has ' + str(len(self.hand)) + ' cards.'
+
+    def get_hand(self):
+        '''get_hand(self) -> str
+        returns a string representation of the hand, one card per line'''
+        output = ''
         for card in self.hand:
-            card.displayCard()
-        print("")
+            output += str(card) + '\n'
+        return output
 
-def initPlayers(players):
-    ''' This function initializes a player of the game '''
-    for i in range(4):
-        hand = []
-        players.append(Player(i + 1, hand, 0))
+    def has_won(self):
+        '''Player.has_won() -> boolean
+        returns True if the player's hand is empty (player has won)'''
+        return len(self.hand) == 0
 
-def initDeck(deck):
-    ''' This function initializes a deck of 108 UNO cards '''
+    def draw_card(self, deck):
+        '''Player.draw_card(deck) -> Card
+        draws a card, adds to the player's hand and returns the card drawn'''
+        card = deck.remove_card()  # get card from the deck
+        self.hand.append(card)   # add this card to the hand
+        return card
 
-    # Create one 0 Card for each colour
-    for col in colours:
-        deck.append(Card(col, 0, None))
+    def play_card(self, card, pile):
+        '''Player.play_card(card,pile)
+        plays a card from the player's hand to the pile'''
+        self.hand.remove(card)
+        pile.add_card(card)
 
-    # Create two cards for numbers 1 - 9 for each colour
-    for col in colours:
-        for i in range(1, 10):
-            deck.append(Card(col, i, None))
-            deck.append(Card(col, i, None))
-
-    # Create two Skip, Reverse, and +2 cards for each colour
-    for col in colours:
-        for s in specialCards:
-            deck.append(Card(col, None, s))
-            deck.append(Card(col, None, s))
-
-    # Create four +4Wildcard and Wildcard cards
-    for w in wildCards:
-        for i in range(4):
-            deck.append(Card(None, None, w))
-
-    # Shuffle the deck
-    random.shuffle(deck)
-
-def displayDeck(deck):
-    '''This function displays all the cards in the deck [for debugging] '''
-    for card in deck:
-        card.displayCard()
-        print("")
-
-def setMiddle(deck, middle):
-    ''' This function will check if the middle at the start of the game is valid
-    (i.e. The middle can't be a 'special' card)
-    If the middle is invalid, then continue to draw cards from the deck until valid '''
-    # If the card is a non-coloured special card (i.e. 'Wildcard')
-    if middle.special ==wildCards[0] or middle.special == wildCards[1]:
-        # The middle card is put at the back of the deck and a new middle card is drawn
-        deck.append(middle)
-        middle = deck.pop(0)
-
-        setMiddle(deck, middle)
-
-    # If the card is a coloured special card (i.e. Skip, Reverse, +2)
-    elif middle.special == specialCards[0] or middle.special == specialCards[1] or middle.special == specialCards[2]:
-        deck.append(middle)
-        middle = deck.pop(0)
-
-        setMiddle(deck, middle)
-
-def drawACard(deck, player):
-    ''' This function will allow the player to draw a card from the top of the deck '''
-    player.addCard(deck.pop(0))
-
-def isSkip(middle):
-    ''' This function returns True if the middle card is a Skip card '''
-    if middle.special == specialCards[0]:
-        return True
-
-def isReverse(middle):
-    ''' This function returns True if the middle card is a Reverse card '''
-    if middle.special == specialCards[1]:
-        return True
-
-def isPlus2(middle):
-    ''' This function returns True if the middle card is a +2 card '''
-    if middle.special == specialCards[2]:
-        return True
-
-def isWildcard4(middle):
-    ''' This function returns True if it the middle card is a +4Wildcard '''
-    if middle.special == wildCards[0]:
-        return True
-
-def playCards(currentPlayer, middle, deck):
-   ''' This function will allow the player to play cards from their hand
-   while making sure the player does not break any rules of the game'''
-   valid = False
-   wildcard = False
-
-   """Checking for special cards (reverse and skip cards will be checked outside of this function, in the main()"""
-   if middle.special in wildCards:
-       middleColour = middle.colour
-       middle.colour = None # reset
-       wildcard = True
-
-   """Ask user to play a card"""
-   while True:
-       print("Enter index of card you want to play (first card is 1, second card is 2, etc.):", end=" ")
-       playerCard = int(input()) - 1
-       # print("you entered: {}".format(playerCard+1))
-       if playerCard < 0 or playerCard >= currentPlayer.numCards:
-           print("Invalid card. Please try again.")
-       else:
-           break
-
-   # If card is completely invalid, and player cannot play
-   # currentPlayer.hand[playerCard].displayCard()
-   # middle.displayCard()
-
-   if currentPlayer.hand[playerCard].colour != middle.colour and currentPlayer.hand[playerCard].number != middle.number and currentPlayer.hand[playerCard].special not in wildCards and currentPlayer.hand[playerCard].special != middle.special:
-       print("CAN'T PLAY, draw card.")
-       pass
-   else:
-       if currentPlayer.hand[playerCard].special is None:
-           print("CAN'T PLAY, draw card.")
-           pass
-       print("VALID CARD!! Wildcard = {}".format(wildcard))
-       """If card is valid, play card, and remove from player's hand"""
-       if wildcard is True:  # if true, we can only play a colour
-         wildcard = False
-         if currentPlayer.hand[playerCard].colour == middleColour:
-             deck.append(middle)
-             middle = currentPlayer.hand.pop(playerCard)
-             valid = True
-             currentPlayer.numCards -= 1
-       else:
-          if currentPlayer.hand[playerCard].colour == middle.colour or currentPlayer.hand[playerCard].number == middle.number or currentPlayer.hand[playerCard].special == middle.special:
-              deck.append(middle)
-              middle = currentPlayer.hand.pop(playerCard)
-
-              currentPlayer.numCards -= 1
-              valid = True  # a valid card was played
-          if currentPlayer.hand[playerCard].special in wildCards:
-              deck.append(middle)
-              middle = currentPlayer.hand.pop(playerCard)
-
-              print("Choose the colour to change to (1=red, 2=blue, 3=green, 4=yellow): ", end="")
-              newColour = int(input())-1
-              middle.colour = colours[newColour]
-              currentPlayer.numCards -= 1
-              valid = True  # a valid card was played
-
-   return valid, middle
+    def take_turn(self, deck, pile):
+        '''Player.take_turn(deck,pile)
+        takes the player's turn in the game'''
+        # print player info
+        print(self.name + ", it's your turn.")
+        print(pile)
+        print("Your hand: ")
+        print(self.get_hand())
+        # get a list of cards that can be played
+        topcard = pile.top_card()
+        matches = [card for card in self.hand if card.match(topcard)]
+        if len(matches) > 0:  # can play
+            for index in range(len(matches)):
+                # print the playable cards with their number
+                print(str(index + 1) + ": " + str(matches[index]))
+            # get player's choice of which card to play
+            choice = 0
+            while choice < 1 or choice > len(matches):
+                choicestr = input("Which do you want to play? ")
+                if choicestr.isdigit():
+                    choice = int(choicestr)
+            # play the chosen card from hand, add it to the pile
+            self.play_card(matches[choice - 1], pile)
+            # default to if not wild card
+            global newColor
+            newColor = ''
+            # if card is wild
+            if matches[choice - 1].rank == 'WILD' or matches[choice - 1].rank == 'WILD DRAW FOUR':
+                while newColor not in ['red', 'blue', 'green', 'yellow']:
+                    # ask for new color
+                    newColor = input('What is the new color? ')
+            return matches[choice - 1].rank, newColor
+        else:  # can't play
+            print("You can't play, so you have to draw.")
+            input("Press enter to draw. ")
+            # check if deck is empty -- if so, reset it
+            if deck.empty():
+                deck.reset_deck(pile)
+            # draw a new card from the deck
+            newcard = self.draw_card(deck)
+            print("You drew: " + str(newcard))
+            if newcard.match(topcard):  # can be played
+                print("Good -- you can play that!")
+                self.play_card(newcard, pile)
+                # default to if not wild card
+                newColor = ''
+                # if card is wild
+                if newcard.rank == 'WILD' or newcard.rank == 'WILD DRAW FOUR':
+                    while newColor not in ['red', 'blue', 'green', 'yellow']:
+                        # ask for new color
+                        newColor = input('What is the new color? ')
+                return newcard.rank, newColor
+            else:   # still can't play
+                print("Sorry, you still can't play.")
+                input("Press enter to continue. ")
+                return topcard.rank, None
 
 
+class Bot:
+    '''represents a computer player'''
+
+    def __init__(self, name, deck):
+        '''Bot(name,deck) -> Bot
+        creates a new computer player with a new 7-card hand'''
+        self.name = name
+        self.hand = [deck.remove_card() for i in range(7)]
+
+    def __str__(self):
+        '''str(UnoBot) -> UnoBot'''
+        return str(self.name) + ' has ' + str(len(self.hand)) + ' cards.'
+
+def findnum(strval):
+    try:
+        x = int(strval)
+        return x
+    except:
+        sys.exit()
+
+
+
+def shufflenames(names):
+    for namePos in range(len(names)):
+        randPos = random.randint(0, (len(names)-1))
+        names[namePos], names[randPos] = names[randPos], names[namePos]
+    return names
 
 def main():
-    ''' This function manages the UNO card game loop '''
-    # Initialize display manager
-    displayManager = DisplayManager.DisplayManager(800,800)
-    # Initialize deck of 108 cards and randomly shuffle them into a queue
-    deck = []
-    initDeck(deck)
-
-    # Initialize the 4 players
-    players = []
-    initPlayers(players)
-
-    # Set the middle card to start the game by drawing from the top of the deck
-    middle = deck.pop(0)
-    setMiddle(deck, middle)
-
-    # Deal 7 cards to each player's hand
-    for i in range(4):
-        for j in range(7):
-            drawACard(deck, players[i])
-
-    # The game is over when a player's number of cards reaches 0
-    # Continue the game loop until game over
-    direction = "clockwise" # Initially, order of play is P1 -> P2 -> P3 -> P4 -> P1 -> ...
-    currentPlayer = -1       # P1's turn will start first
-
+    '''main(numPlayers)
+    plays a game of Uno with a number of Players'''
+    # set up full deck and initial discard pile
+    global deck
+    deck = Deck()
+    global pile
+    pile = Pile(deck)
+    # set up game modifier (aka action cards)
+    powers = ['SKIP', 'REVERSE', 'DRAW TWO']
+    # bot names for fun :D
+    botNames  = ['Apple', 'Orange', 'Banana', 'Coconut', 'Watermelon', 'Orange',
+                'Cherry', 'Pear', 'Mango', 'Strawberry', 'Kiwi', 'Cantaloupe'
+                'Pineapple', 'Grapefruit', 'Peach', 'Grape', 'Lemon']
+    shufflenames(botNames)
+    # set up player changer
+    playerChange = 1
+    global numPlayers
+    numPlayers = findnum(input("how many players?" ))
+    numBots = findnum(input("how many cpus?" ))
+    # set up the players
+    global playerList
+    playerList = []
+    for n in range(numPlayers):
+        # get each player's name, then create an UnoPlayer
+        name = input('Player #' + str(n + 1) + ', enter your name: ')
+        playerList.append(Player(name, deck))
+    for n in range(numBots):
+        name = botNames[n] + ' Bot'
+        playerList.append(Bot(name, deck))
+    # randomly assign who goes first
+    global currentPlayerNum
+    currentPlayerNum = random.randrange(numPlayers)
+    # play the game
     while True:
-        # The direction of play determines the order
-        if direction == "clockwise":
-            # Determine which player's turn it is
-            currentPlayer = (currentPlayer + 1) % 4
-
-            # Check the middle card and apply any special card effects
-            if isReverse(middle):
-                currentPlayer = (currentPlayer - 1) % 4
-                direction == "counterClockwise"
-                continue
-
-            if isSkip(middle):
-                continue
-
-            if isPlus2(middle):
-                for i in range(2):
-                    drawACard(deck, players[currentPlayer])
-
-            if isWildcard4(middle):
-                for i in range(4):
-                    drawACard(deck, players[currentPlayer])
-
-            # Display the middle card to the current player
-            print("Here is the middle card: ", end = " ")
-            middle.displayCard()
-            print("")
-
-            # Display the current player's hand to the terminal
-            players[currentPlayer].displayHand()
-            # Display current scene
-            displayManager.drawScene(players[currentPlayer], middle)
-            displayManager.updateScene()
-            # The current player may play a card/cards from their hand
-                # If no card is played, the current player must draw a card from the deck
-
-
-            # If the current player has no cards remaining, they win!
-            if players[currentPlayer].numCards == 0:
-                break
-
-        # The game order has been reversed and is COUNTERClockwise
-        else:
-            # Determine which player's turn it is
-            currentPlayer = (currentPlayer - 1) % 4
-
-            # Check the middle card and apply any special card effects
-            if isReverse(middle):
-                currentPlayer = (currentPlayer - 1) % 4
-                direction == "clockwise"
-                continue
-
-            if isSkip(middle):
-                continue
-
-            if isPlus2(middle):
-                for i in range(2):
-                    drawACard(deck, players[currentPlayer])
-
-            if isWildcard4(middle):
-                for i in range(4):
-                    drawACard(deck, players[currentPlayer])
-
-            # Display the middle card to the current player
-            print("Here is the middle card: ", end = " ")
-            middle.displayCard()
-            print("")
-
-            # Display the current player's hand to the terminal
-            players[currentPlayer].displayHand()
-
-            # The current player may play a card/cards from their hand
-                # If no card is played, the current player must draw a card from the deck
-
-            # If the current player has no cards remaining, they win!
-            if players[currentPlayer].numCards == 0:
-                break
-
-        # Remove this later
-        if currentPlayer == 3:
+        # print the game status
+        print('\n' * 1)
+        print('-------')
+        for player in playerList:
+            print(player)
+        print('-------')
+        # take a turn]
+        move, colorl = playerList[currentPlayerNum].take_turn(deck, pile)
+        # check for a winner
+        if playerList[currentPlayerNum].has_won():
+            print(playerList[currentPlayerNum].name + " wins!")
+            print("Thanks for playing!")
             break
-        displayManager.quit()
+        # normalize playerChange
+        playerChange = int(abs(playerChange) / playerChange)
 
-main()
+        # go to the next player and acknowledge game modifier
+        checkmove(move)
+        # change the player appropriately
+        currentPlayerNum = (currentPlayerNum + playerChange) % numPlayers
+
+def checkmove(move):
+    playerChange = 1
+            # if the card just played is SKIP
+    if move == 'SKIP':
+        playerChange *= 2
+        # if the card just played is REVERSE
+    elif move == 'REVERSE':
+        playerChange *= -1
+        # if the card just played is DRAW TWO
+    elif move == 'DRAW TWO':
+        # draw two cards
+        for i in range(2):
+            global playerList
+            global currentPlayerNum
+            global numPlayers
+            global deck
+            global playerList
+            playerList[(currentPlayerNum + playerChange) %numPlayers].draw_card(deck)
+        # skip that player
+        playerChange *= 2
+    elif move == 'WILD' or move == 'WILD DRAW FOUR':
+        # set new color
+        pile.top_card().color = newColor
+        # draw four cards
+    if move == 'WILD DRAW FOUR':
+        for i in range(4):
+            playerList[(currentPlayerNum + playerChange) %
+                           numPlayers].draw_card(deck)
+            # skip that player
+            playerChange *= 2
+    return True
+
+if __name__ == "__main__":
+    main()
